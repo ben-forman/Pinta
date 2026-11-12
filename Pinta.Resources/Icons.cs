@@ -256,6 +256,7 @@ public static class Icons
 	public const string ToolPencil = "tool-pencil-symbolic";
 	public const string ToolRecolor = "tool-recolor-symbolic";
 	public const string ToolRectangle = "tool-rectangle-symbolic";
+	public const string ToolSymmetryBrush = "tool-symmetry-brush-symbolic";
 	public const string ToolRectangleRounded = "tool-rectangle-rounded-symbolic";
 	public const string ToolSelectEllipse = "tool-select-ellipse-symbolic";
 	public const string ToolSelectLasso = "tool-select-lasso-symbolic";

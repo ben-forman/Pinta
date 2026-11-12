@@ -10,6 +10,9 @@ internal static class SettingNames
 
 	internal const string PAINT_BRUSH_BRUSH = "paint-brush-brush";
 
+	internal const string SYMMETRY_BRUSH_BRUSH = "symmetry-brush-brush";
+	internal const string SYMMETRY_BRUSH_MODE = "symmetry-brush-mode";
+
 	internal const string TEXT_FONT = "text-font";
 	internal const string TEXT_VARIANT = "text-variant";
 	internal const string TEXT_WEIGHT = "text-weight";

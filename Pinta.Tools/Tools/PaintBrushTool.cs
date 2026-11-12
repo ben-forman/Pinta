@@ -33,7 +33,7 @@ using Pinta.Core;
 
 namespace Pinta.Tools;
 
-public sealed class PaintBrushTool : BaseBrushTool
+public class PaintBrushTool : BaseBrushTool
 {
 	private readonly IPaintBrushService brushes;
 	private readonly IWorkspaceService workspace;
@@ -49,7 +49,7 @@ public sealed class PaintBrushTool : BaseBrushTool
 	{
 		brushes = services.GetService<IPaintBrushService> ();
 		foreach (BasePaintBrush brush in brushes) {
-			brush.OnCursorChanged += () => SetCursorFromBrush (brush);
+			brush.OnCursorChanged += () => OnBrushCursorChanged (brush);
 		}
 
 		default_brush = brushes.FirstOrDefault ();
@@ -57,7 +57,7 @@ public sealed class PaintBrushTool : BaseBrushTool
 
 		brushes.BrushAdded += (_, a) => {
 			RebuildBrushComboBox ();
-			a.Brush.OnCursorChanged += () => SetCursorFromBrush (a.Brush);
+			a.Brush.OnCursorChanged += () => OnBrushCursorChanged (a.Brush);
 		};
 		brushes.BrushRemoved += (_, _) => RebuildBrushComboBox ();
 
@@ -151,19 +151,10 @@ public sealed class PaintBrushTool : BaseBrushTool
 		if (!last_point.HasValue)
 			last_point = e.Point;
 
-		var surf = document.Layers.ToolLayer.Surface;
-		using Context g = document.CreateClippedToolContext ();
-
-		g.Antialias = UseAntialiasing ? Antialias.Subpixel : Antialias.None;
-		g.LineWidth = BrushWidth;
-		g.LineJoin = LineJoin.Round;
-		g.LineCap = LineCap.Round;
-		g.SetSourceColor (strokeColor);
-
 		BrushStrokeArgs strokeArgs = new (strokeColor, e.Point, last_point.Value);
 
 		CancelRepeatingDraw ();
-		var invalidate_rect = active_brush.DoMouseMove (g, surf, strokeArgs);
+		var invalidate_rect = DrawStroke (document, active_brush, strokeArgs);
 		if (stroke_dirty_rect is null)
 			stroke_dirty_rect = invalidate_rect;
 		else
@@ -187,6 +178,36 @@ public sealed class PaintBrushTool : BaseBrushTool
 		}
 		last_point = e.Point;
 	}
+
+	/// <summary>
+	/// Draws one segment of the current stroke onto the tool layer using the given brush.
+	/// Subclasses can override this to change where or how the segment is drawn.
+	/// </summary>
+	/// <returns>The area of the canvas that needs to be redrawn.</returns>
+	protected virtual RectangleI DrawStroke (Document document, BasePaintBrush brush, BrushStrokeArgs strokeArgs)
+	{
+		using Context g = document.CreateClippedToolContext ();
+		ConfigureStrokeContext (g, strokeArgs.StrokeColor);
+
+		return brush.DoMouseMove (g, document.Layers.ToolLayer.Surface, strokeArgs);
+	}
+
+	/// <summary>
+	/// Applies the tool's current settings (antialiasing, brush width, color) to a drawing context.
+	/// </summary>
+	protected void ConfigureStrokeContext (Context g, Color strokeColor)
+	{
+		g.Antialias = UseAntialiasing ? Antialias.Subpixel : Antialias.None;
+		g.LineWidth = BrushWidth;
+		g.LineJoin = LineJoin.Round;
+		g.LineCap = LineCap.Round;
+		g.SetSourceColor (strokeColor);
+	}
+
+	/// <summary>
+	/// The name of the setting which stores the selected brush type.
+	/// </summary>
+	protected virtual string BrushTypeSettingName => SettingNames.PAINT_BRUSH_BRUSH;
 
 	protected override void OnMouseUp (Document document, ToolMouseEventArgs e)
 	{
@@ -216,7 +237,7 @@ public sealed class PaintBrushTool : BaseBrushTool
 		base.OnSaveSettings (settings);
 
 		if (brush_combo_box is not null)
-			settings.PutSetting (SettingNames.PAINT_BRUSH_BRUSH, brush_combo_box.ComboBox.Active);
+			settings.PutSetting (BrushTypeSettingName, brush_combo_box.ComboBox.Active);
 
 		if (active_brush is not null) {
 			foreach (var option in active_brush.Options) {
@@ -256,7 +277,7 @@ public sealed class PaintBrushTool : BaseBrushTool
 
 				RebuildBrushComboBox ();
 
-				var brush = Settings.GetSetting (SettingNames.PAINT_BRUSH_BRUSH, 0);
+				var brush = Settings.GetSetting (BrushTypeSettingName, 0);
 
 				if (brush < brush_combo_box.ComboBox.Model.IterNChildren (null))
 					brush_combo_box.ComboBox.Active = brush;
@@ -298,6 +319,13 @@ public sealed class PaintBrushTool : BaseBrushTool
 				brush_specific_options_box.Append (ToolOptionWidgetService.GetWidgetForOption (option));
 			}
 		}
+	}
+
+	private void OnBrushCursorChanged (BasePaintBrush brush)
+	{
+		// Brushes are shared between tools, so only the active tool should react.
+		if (IsActiveTool ())
+			SetCursorFromBrush (brush);
 	}
 
 	private void SetCursorFromBrush (BasePaintBrush brush)
